@@ -1,6 +1,6 @@
 # rgrep
 
-A fast, lightweight command-line text search utility written in Rust, designed to replicate the core functionality of Unix `grep` with modern regular expressions, buffered I/O, and safe concurrency.
+A fast and lightweight command line text search utility written in Rust, designed to replicate the core functionality of Unix `grep` with modern regular expressions, buffered I/O, and safe concurrency.
 
 ## Features
 
