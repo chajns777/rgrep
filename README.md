@@ -23,10 +23,10 @@ A fast, lightweight, POSIX-compliant command-line text search utility written in
 
 ## Features
 
-- **Regex & Fixed-String Engines:** Powered by Rust's [`regex`](https://docs.rs/regex) crate for guaranteed linear-time ($\mathcal{O}(n)$) matching immune to catastrophic backtracking, paired with `-F` / `--fixed-strings` (`regex::escape`) for exact literal searches.
+- **Regex & Fixed-String Engines:** Powered by Rust's [`regex`](https://docs.rs/regex) crate for guaranteed linear-time 0(n) matching immune to catastrophic backtracking, paired with `-F` / `--fixed-strings` (`regex::escape`) for exact literal searches.
 - **Flexible Input Sources:** Searches single files, multiple files, recursive directory trees (`-r`), and standard input (`stdin` when paths are omitted or `-` is passed—even interleaved with real files).
 - **Deterministic Directory Traversal:** Walks subdirectories via `std::fs::read_dir`, sorts entries lexicographically for reproducible output, and silently skips non-UTF-8 binary files (`io::ErrorKind::InvalidData`).
-- **Terminal-Aware ANSI Highlighting:** Uses `std::io::IsTerminal` (`--color auto`) to highlight matches in yellow (`\x1b[43;30m`), filenames in magenta, line numbers in green, and separators in cyan when connected to an interactive TTY—automatically disabling escape codes when piped or redirected.
+- **Terminal-Aware ANSI Highlighting:** Uses `std::io::IsTerminal` (`--color auto`) to highlight matches in red, filenames in magenta, line numbers in green, and separators in cyan when connected to an interactive TTY—automatically disabling escape codes when piped or redirected.
 - **POSIX Flag Parsing:** Supports combined short flags (e.g., `-rinw`), long flags, explicit `-` stdin markers, and standard exit status conventions.
 
 ---
