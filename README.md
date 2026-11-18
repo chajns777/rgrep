@@ -1,6 +1,6 @@
 # rgrep
 
-A fast, lightweight, POSIX-compliant command-line text search utility written in Rust. `rgrep` replicates the core workflow of Unix `grep` with regular expression matching, fixed-string literal search, recursive directory traversal, standard input piping, and terminal-aware ANSI color highlighting.
+A fast, lightweight command-line search tool written in Rust. `rgrep` takes the everyday Unix `grep` workflow and gives it a modern Rust makeover: linear-time regular expressions, parallel directory searching, context lines, and sensible terminal highlighting.
 
 ---
 
@@ -9,25 +9,26 @@ A fast, lightweight, POSIX-compliant command-line text search utility written in
 - [Features](#features)
 - [Installation](#installation)
 - [Usage](#usage)
-  - [Arguments & Input Behavior](#arguments--input-behavior)
+  - [Arguments and input behaviour](#arguments-and-input-behaviour)
   - [Options](#options)
   - [Examples](#examples)
-  - [Exit Codes](#exit-codes)
+  - [Exit codes](#exit-codes)
 - [Architecture](#architecture)
-  - [Project Structure](#project-structure)
-  - [Execution Pipeline](#execution-pipeline)
-- [Development & Testing](#development--testing)
-- [License](#license)
+  - [Project structure](#project-structure)
+  - [Execution pipeline](#execution-pipeline)
+- [Development and testing](#development-and-testing)
+- [Licence](#licence)
 
 ---
 
 ## Features
 
-- **Regex & Fixed-String Engines:** Powered by Rust's [`regex`](https://docs.rs/regex) crate for guaranteed linear-time 0(n) matching immune to catastrophic backtracking, paired with `-F` / `--fixed-strings` (`regex::escape`) for exact literal searches.
-- **Flexible Input Sources:** Searches single files, multiple files, recursive directory trees (`-r`), and standard input (`stdin` when paths are omitted or `-` is passed—even interleaved with real files).
-- **Deterministic Directory Traversal:** Walks subdirectories via `std::fs::read_dir`, sorts entries lexicographically for reproducible output, and silently skips non-UTF-8 binary files (`io::ErrorKind::InvalidData`).
-- **Terminal-Aware ANSI Highlighting:** Uses `std::io::IsTerminal` (`--color auto`) to highlight matches in red, filenames in magenta, line numbers in green, and separators in cyan when connected to an interactive TTY—automatically disabling escape codes when piped or redirected.
-- **POSIX Flag Parsing:** Supports combined short flags (e.g., `-rinw`), long flags, explicit `-` stdin markers, and standard exit status conventions.
+- **Parallel file searching:** Uses [`rayon`](https://docs.rs/rayon) to search several files at once across all your CPU cores. Output is mutex-synchronised, so lines never get jumbled together.
+- **Regex and literal search:** Built on Rust's [`regex`](https://docs.rs/regex) crate, which guarantees linear-time O(n) matching with no catastrophic backtracking. Need an exact string instead? Use `-F` / `--fixed-strings`.
+- **Context windows (`-A`, `-B`, `-C`):** See the lines before and after a match. Overlapping windows are merged automatically, and separate blocks are divided with `--`.
+- **Recursive search and glob filtering:** Dive into nested directories with `-r`, and narrow things down with `--include` and `--exclude`. Binary (non-UTF-8) files are quietly skipped.
+- **Script-friendly quiet mode (`-q`):** Stops at the first match and exits with `0` without printing anything. Perfect for shell conditionals and CI pipelines.
+- **Terminal-aware colours:** `rgrep` checks whether `stdout` is an interactive terminal (`--color auto`). Matches show in red, file paths in magenta, line numbers in green and separators in cyan. When you pipe the output, the ANSI codes are stripped out cleanly.
 
 ---
 
@@ -35,17 +36,19 @@ A fast, lightweight, POSIX-compliant command-line text search utility written in
 
 ### Prerequisites
 
-- Rust toolchain (`rustc` and `cargo`, edition 2021+)
+- A Rust toolchain (`rustc` and `cargo`, edition 2021 or newer)
 
-### Build from Source
+### Build from source
 
 ```bash
-git clone [https://github.com/yourusername/rgrep.git](https://github.com/yourusername/rgrep.git)
+git clone https://github.com/chajns777/rgrep.git
 cd rgrep
 cargo build --release
 ```
 
-The compiled binary is written to `./target/release/rgrep`. To install it globally into your Cargo `bin` directory (`~/.cargo/bin`):
+The compiled binary will be at `./target/release/rgrep`.
+
+To install it globally into your Cargo bin folder (`~/.cargo/bin`):
 
 ```bash
 cargo install --path .
@@ -59,105 +62,114 @@ cargo install --path .
 rgrep [OPTIONS] <QUERY> [FILE]...
 ```
 
-### Arguments & Input Behavior
+### Arguments and input behaviour
 
 | Argument | Description |
-| :--- | :--- |
-| `<QUERY>` | Regular expression pattern (or literal string when `-F` is set) to search for. |
-| `[FILE]...` | Zero or more file or directory paths to search. |
+| --- | --- |
+| `<QUERY>` | The regular expression to search for (or a literal string when `-F` is set). |
+| `[FILE]...` | Zero or more files or directories to search. |
 
-- **Omitted `[FILE]...` (default mode):** Reads from standard input (`stdin`).
-- **Omitted `[FILE]...` with `-r` / `--recursive`:** Defaults to searching the current directory (`.`).
-- **Explicit `-`:** Reads from `stdin` at that position in the argument list and labels matches `(standard input)` when multiple targets are searched.
-- **Directories without `-r`:** Prints `rgrep: <path>: Is a directory` to `stderr` and continues processing remaining targets.
+A few things worth knowing:
+
+- **No `[FILE]...` given:** `rgrep` reads from standard input (stdin).
+- **No `[FILE]...` with `-r` / `--recursive`:** It searches the current directory (`.`).
+- **An explicit `-`:** Reads stdin at that position in the argument list. When searching multiple sources, matches are labelled `(standard input)`.
+- **A directory without `-r`:** Prints `rgrep: <path>: Is a directory` to stderr and carries on with the remaining targets.
 
 ### Options
 
 | Short | Long | Description |
-| :--- | :--- | :--- |
-| `-i` | `--ignore-case` | Perform case-insensitive pattern matching. |
+| --- | --- | --- |
+| `-i` | `--ignore-case` | Match case-insensitively. |
 | `-v` | `--invert-match` | Select lines that do **not** match `<QUERY>`. |
-| `-n` | `--line-number` | Prefix each matching line with its 1-based line number. |
-| `-c` | `--count` | Suppress normal line output and print only the count of matching lines per target. |
-| `-w` | `--word-regexp` | Match only whole words by wrapping the pattern in `\b(?:...)\b` word boundaries. |
-| `-r` | `--recursive` | Recursively traverse subdirectories to search all text files. |
-| `-F` | `--fixed-strings` | Interpret `<QUERY>` as a literal string rather than a regular expression. |
-| | `--color <WHEN>` | Control ANSI color output: `auto` (TTY-aware default), `always`, or `never`. |
-| `-h` | `--help` | Display usage instructions and flag reference. |
+| `-n` | `--line-number` | Prefix each output line with its 1-based line number (`:` for matches, `-` for context). |
+| `-c` | `--count` | Suppress normal output and print only the number of matching lines per file. |
+| `-w` | `--word-regexp` | Match whole words only, by wrapping the pattern in `\b(?:...)\b`. |
+| `-r` | `--recursive` | Recursively walk subdirectories and search all matching text files. |
+| `-F` | `--fixed-strings` | Treat `<QUERY>` as a literal string, not a regular expression. |
+| `-q` | `--quiet` | Suppress all normal output and exit with `0` as soon as a match is found. |
+| `-A <NUM>` | | Print `<NUM>` lines of trailing context after each match. |
+| `-B <NUM>` | | Print `<NUM>` lines of leading context before each match. |
+| `-C <NUM>` | | Print `<NUM>` lines of context both before and after each match. |
+| | `--include=<GLOB>` | Search only files whose names match `<GLOB>` (e.g. `*.rs`). |
+| | `--exclude=<GLOB>` | Skip files whose names match `<GLOB>` (e.g. `*.log`). |
+| | `--color <WHEN>` | Control ANSI colour highlighting: `auto` (default), `always` or `never`. |
+| `-h` | `--help` | Print usage instructions and available options. |
 
 ### Examples
 
 ```bash
-# Search for a regex pattern across Rust source files with line numbers
-rgrep -rn "^pub (fn|struct|enum)" src/
+# Recursively search only Rust files for public items, with line numbers
+rgrep -rn --include="*.rs" "^pub (fn|struct|enum)" src/
 
-# Search for an exact literal signature containing regex metacharacters
+# Show 2 lines of context before and after every match
+rgrep -n -C 2 "Mutex" src/lib.rs
+
+# Search for an exact literal signature that contains regex characters
 rgrep -rnF "Result<(), Box<dyn Error>>" src/
 
-# Case-insensitive whole-word search across specific files
-rgrep -iw "config" src/cli.rs src/lib.rs
+# Use quiet mode in a shell script to check whether a pattern exists
+if rgrep -rq "TODO" src/; then
+  echo "Found remaining TODOs!"
+fi
 
 # Count non-matching lines piped from standard input
 cat access.log | rgrep -vc "200 OK"
 
-# Mix standard input (-) and a file in a single invocation
-printf "pub fn piped()\n" | rgrep -n "pub fn" - src/lib.rs
-
-# Force ANSI colors when piping into a pager like less
-rgrep --color always -rn "TODO" src/ | less -R
+# Force ANSI colours when piping into a pager like less
+rgrep --color always -rn "Config" src/ | less -R
 ```
 
-### Exit Codes
+### Exit codes
 
-`rgrep` follows standard POSIX `grep` exit status conventions so it integrates cleanly into shell scripts and CI pipelines:
+`rgrep` follows the standard POSIX `grep` exit codes, so you can rely on it in scripts and automation:
 
 | Code | Meaning |
-| :--- | :--- |
-| `0` | One or more matching lines were found (or `--help` was displayed). |
-| `1` | No matching lines were found across any target. |
-| `2` | A CLI syntax error, invalid regular expression, or I/O error occurred. |
+| --- | --- |
+| `0` | One or more matches were found (or `--help` was shown). |
+| `1` | No matches were found in any target. |
+| `2` | A CLI argument error, invalid regex syntax, or file I/O error occurred. |
 
 ---
 
 ## Architecture
 
-The codebase separates CLI parsing, target resolution, regex compilation, and ANSI formatting into three focused modules so core search logic remains independent of process exit handling.
+The codebase is split into three focused modules: CLI parsing, target discovery plus parallel execution, and ANSI formatting. This keeps the core search logic separate from process exit handling.
 
-### Project Structure
+### Project structure
 
 ```text
 rgrep/
-├── Cargo.toml         # Package manifest & regex crate dependency
+├── Cargo.toml         # Package manifest and dependencies (regex, rayon)
 ├── Cargo.lock         # Locked dependency graph
 └── src/
-    ├── main.rs        # Process entry point,
+    ├── main.rs        # Process entry point and exit code mapping
     ├── cli.rs         # Argument parser, combined flag expansion, ColorMode, and Config
-    └── lib.rs         # Regex compilation, target resolution, directory walker, and search runner
+    └── lib.rs         # Regex builder, recursive file filter, Rayon runner, and context search
 ```
 
-### Execution Pipeline
+### Execution pipeline
 
 ```text
   std::env::args()
          │
          ▼
-  cli::Config::build() ──▶ Parse short/long flags, ColorMode, and positional args
+  cli::Config::build() ──▶ Parse short/long flags, context counts, globs, and ColorMode
          │
          ▼
   lib::run(config)
-    ├──▶ build_regex()       Compile Regex once (-F escape, -w \b boundaries, -i case)
-    ├──▶ resolve_targets()   Expand directories via fs::read_dir (sorted) & map '-' to Stdin
-    └──▶ Per-Target Loop
+    ├──▶ build_regex()         Compile Regex once (-F escape, -w \b boundaries, -i case)
+    ├──▶ resolve_targets()     Walk directories via fs::read_dir (sorted) & apply --include/--exclude
+    ├──▶ [If -q / --quiet]     Parallel short-circuit via par_iter().any() ──▶ exit(0) or exit(1)
+    └──▶ Parallel Target Loop  (rayon::par_iter() + Mutex-synchronised stdout)
            ├── Read UTF-8 contents (silently skipping non-UTF-8 binary files)
-           ├── search(&re, &contents, invert) ──▶ Collect line numbers & byte match spans
-           └── Format & print with TTY-aware ANSI colors (filename, line number, highlights)
+           ├── search_with_context() ──▶ Merge overlapping -A/-B/-C windows & insert '--' separators
+           └── Format & print with TTY-aware ANSI colours (file path, line number, highlights)
 ```
 
 ---
 
-## Development & Testing
-
-### Build & Lint
+## Development and testing
 
 ```bash
 # Check compilation and warnings
@@ -170,14 +182,14 @@ cargo clippy
 cargo test
 ```
 
-### Quick Smoke Test
+A quick smoke test:
 
 ```bash
-cargo run -- -rn "^pub (fn|struct|enum)" src
+cargo run -- -rn --include="*.rs" "^pub (fn|struct|enum)" src
 ```
 
 ---
 
-## License
+## Licence
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT Licence. See the [LICENSE](LICENSE) file for details.
