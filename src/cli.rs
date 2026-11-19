@@ -35,6 +35,11 @@ pub struct Config {
     pub recursive: bool,
     pub fixed_strings: bool,
     pub color: ColorMode,
+    pub quiet: bool,
+    pub before_context: usize,
+    pub after_context: usize,
+    pub include_pattern: Option<String>,
+    pub exclude_pattern: Option<String>,
 }
 pub enum ParseResult {
     Run(Config),
@@ -79,6 +84,11 @@ impl Config {
         let mut invert_match = false;
         let mut word_regexp = false;
         let mut color = ColorMode::Auto;
+        let mut quiet = false;
+        let mut before_context = 0;
+        let mut after_context = 0;
+        let mut include_pattern = None;
+        let mut exclude_pattern = None;
         let mut positional = Vec::new();
         let mut i = 1;
         while i < args.len() {
@@ -91,6 +101,12 @@ impl Config {
                 fixed_strings = true;
             } else if arg == "--recursive" {
                 recursive = true;
+            } else if arg == "--quiet" || arg == "-q" {
+                quiet = true;
+            } else if let Some(val) = arg.strip_prefix("--include=") {
+                include_pattern = Some(val.to_string());
+            } else if let Some(val) = arg.strip_prefix("--exclude=") {
+                exclude_pattern = Some(val.to_string());
             } else if let Some(val) = arg.strip_prefix("--color=") {
                 color = parse_color(val)?;
             } else if arg == "--color" {
@@ -99,6 +115,30 @@ impl Config {
                     .get(i)
                     .ok_or_else(|| "Option '--color' requires a value (auto, always, never)".to_string())?;
                 color = parse_color(val)?;
+            } else if let Some(val) = arg.strip_prefix("-A") {
+                after_context = if val.is_empty() {
+                    i += 1;
+                    args.get(i).ok_or("Option '-A' requires a value")?.parse().map_err(|_| "Invalid value for -A")?
+                } else {
+                    val.parse().map_err(|_| "Invalid value for -A")?
+                };
+            } else if let Some(val) = arg.strip_prefix("-B") {
+                before_context = if val.is_empty() {
+                    i += 1;
+                    args.get(i).ok_or("Option '-B' requires a value")?.parse().map_err(|_| "Invalid value for -B")?
+                } else {
+                    val.parse().map_err(|_| "Invalid value for -B")?
+                };
+            } else if let Some(val) = arg.strip_prefix("-C") {
+                let val = if val.is_empty() {
+                    i += 1;
+                    args.get(i).ok_or("Option '-C' requires a value")?
+                } else {
+                    val
+                };
+                let num: usize = val.parse().map_err(|_| "Invalid value for -C")?;
+                before_context = num;
+                after_context = num;
             } else if arg.starts_with("--") {
                 return Err(format!("Unknown option: {arg}"));
             } else if let Some(flags) = arg.strip_prefix('-') {
@@ -124,9 +164,6 @@ impl Config {
             }
             i += 1;
         }
-        if positional.len() < 2 {
-            return Err("Not enough arguments. Try 'rgrep --help' for usage.".to_string());
-        }
         if positional.is_empty() {
             return Err("Not enough arguments. Try 'rgrep --help' for usage.".to_string());
         }
@@ -140,17 +177,22 @@ impl Config {
         } else {
             positional[1..].iter().map(|s| (*s).clone()).collect()
         };
-        Ok(ParseResult::Run(Config {
-            query,
-            filenames,
-            ignore_case,
-            count_only,
-            line_numbers,
-            invert_match,
-            word_regexp,
-            recursive,
-            fixed_strings,
-            color,
-        }))
-        }
-    }
+    Ok(ParseResult::Run(Config {
+    query,
+    filenames,
+    ignore_case,
+    count_only,
+    line_numbers,
+    invert_match,
+    word_regexp,
+    recursive,
+    fixed_strings,
+    color,
+    quiet,
+    before_context,
+    after_context,
+    include_pattern,
+    exclude_pattern,
+}))
+}
+}
