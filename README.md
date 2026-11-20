@@ -1,6 +1,6 @@
 # rgrep
 
-A fast, lightweight, POSIX-compliant command-line text search utility written in Rust. `rgrep` replicates the core Unix `grep` workflow with linear-time regular expression matching, fixed-string search, parallel recursive directory traversal, standard input piping, context lines, and terminal-aware ANSI highlighting.
+A fast, lightweight and POSIX-compliant command-line text search utility written in Rust. `rgrep` replicates the core Unix `grep` workflow with linear-time regular expression matching, fixed-string search, parallel recursive directory traversal, standard input piping, context lines, and terminal-aware ANSI highlighting.
 
 ---
 
